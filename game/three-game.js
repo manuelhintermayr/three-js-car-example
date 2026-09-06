@@ -3,12 +3,14 @@ import * as THREE from 'three';
 import { initPhysicsEngine } from './physics-world.js';
 import { createRenderer, GlowComposer } from './rendering.js';
 import { GameSession } from './game-session.js';
+import { FpsMeter } from './fps-meter.js';
 
 const CANVAS_FOCUS_DELAY_MS = 100;
 
 let canvas;
 let renderer;
 let glowComposer;
+let fpsMeter;
 let session = null;
 const timer = new THREE.Timer();
 
@@ -20,6 +22,9 @@ export function initializeGame(vueApp) {
     canvas = document.getElementById('renderCanvas');
     renderer = createRenderer(canvas);
     glowComposer = new GlowComposer(renderer);
+    fpsMeter = new FpsMeter(fps => {
+        vueApp.fps = fps;
+    });
 
     initPhysicsEngine()
         .then(() => startSession(vueApp))
@@ -73,6 +78,7 @@ function renderFrame() {
     timer.update();
     session.update(timer.getDelta());
     glowComposer.render();
+    fpsMeter.tick();
 }
 
 function handleResize() {

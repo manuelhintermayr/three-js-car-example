@@ -77,6 +77,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 - **Vehicle telemetry** (speed, 3D position, rotation)
 - **Performance metrics** (total collisions, race time, maximum speed)
 - **Progress tracking** (knocked boxes counter with physics detection)
+- **FPS counter** badge in the top right corner, averaged over half-second windows
 - **Interactive debug panels** with F12 / backtick toggle and auto-hide on mobile
 
 ## 🖥️ Cross-Platform Controls
@@ -111,16 +112,19 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 ├── 📁 components/            # 🔧 Vue components (unchanged from the original)
 │   ├── 📄 info-panel.js      # Debug panel with glassmorphism UI
 │   ├── 📄 desktop-controls.js # Keyboard controls display with jump/brake
-│   └── 📄 mobile-controls.js  # Touch controls with joystick & jump
+│   ├── 📄 mobile-controls.js  # Touch controls with joystick & jump
+│   └── 📄 fps-counter.js     # FPS badge
 │
 ├── 📁 css/                   # 🎨 Stylesheets (unchanged from the original)
 │   ├── 📄 main.css
 │   ├── 📄 info-panel.css
 │   ├── 📄 mobile-controls.css
-│   └── 📄 desktop-controls.css
+│   ├── 📄 desktop-controls.css
+│   └── 📄 fps-counter.css
 │
 └── 📁 game/                  # 🎮 Three.js + Rapier game engine & assets
     ├── 📄 three-game.js      # Entry points: initializeGame, resetGame, resetBoxes
+    ├── 📄 fps-meter.js       # Frames per second, averaged over short windows
     ├── 📄 game-session.js    # One round: scene, world, car, environment, update loop
     ├── 📄 physics-world.js   # Rapier world, fixed timestep stepper, collision groups
     ├── 📄 rendering.js       # Renderer, selective glow bloom, reflection probe
