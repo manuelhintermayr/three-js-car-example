@@ -1,5 +1,5 @@
 {
-  "name": "threejs-rapier-car-example",
+  "name": "threejs-car-example",
   "version": "1.0.0",
   "description": "Three.js + Rapier port of the Babylon.js car racing game: constraint-based car physics, Vue.js UI, intelligent device detection and cross-platform controls without a build step.",
   "main": "index.js",
@@ -45,10 +45,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/manuelhintermayr/threejs-rapier-car-example.git"
+    "url": "https://github.com/manuelhintermayr/threejs-car-example.git"
   },
   "bugs": {
-    "url": "https://github.com/manuelhintermayr/threejs-rapier-car-example/issues"
+    "url": "https://github.com/manuelhintermayr/threejs-car-example/issues"
   },
-  "homepage": "https://github.com/manuelhintermayr/threejs-rapier-car-example#readme"
+  "homepage": "https://github.com/manuelhintermayr/threejs-car-example#readme"
 }

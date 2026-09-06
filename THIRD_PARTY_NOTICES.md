@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This document lists third-party code and assets used by
-**threejs-rapier-car-example**, and separates them from the project's own source code.
+**threejs-car-example**, and separates them from the project's own source code.
 
 ## 1. Own source code
 

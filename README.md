@@ -4,7 +4,7 @@ A Three.js + Rapier port of the [Babylon.js Car Racing Game](https://github.com/
 
 ## 🎮 Live Demo
 
-**Play now:** [https://projects.manuelhintermayr.com/threejs-rapier-car-example](https://projects.manuelhintermayr.com/threejs-rapier-car-example)
+**Play now:** [https://projects.manuelhintermayr.com/threejs-car-example](https://projects.manuelhintermayr.com/threejs-car-example)
 
 The Babylon.js original runs at [https://projects.manuelhintermayr.com/babylon-js-car-example](https://projects.manuelhintermayr.com/babylon-js-car-example), so both versions can be compared side by side.
 
@@ -104,7 +104,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 ## 🏗️ Project Structure
 
 ```
-📦 threejs-rapier-car-example/
+📦 threejs-car-example/
 ├── 📄 .gitignore             # Git ignore patterns
 ├── 📄 index.html             # HTML template with the import map and module imports
 ├── 📄 index.js               # 🎯 Application entry point
@@ -159,7 +159,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 ## 🚀 Getting Started
 
 ### **🎮 Try It Now**
-**Live Demo:** [https://projects.manuelhintermayr.com/threejs-rapier-car-example](https://projects.manuelhintermayr.com/threejs-rapier-car-example)
+**Live Demo:** [https://projects.manuelhintermayr.com/threejs-car-example](https://projects.manuelhintermayr.com/threejs-car-example)
 
 *No installation required - play directly in your browser!*
 
@@ -172,8 +172,8 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/manuelhintermayr/threejs-rapier-car-example.git
-   cd threejs-rapier-car-example
+   git clone https://github.com/manuelhintermayr/threejs-car-example.git
+   cd threejs-car-example
    ```
 
 2. **Start a local server**
