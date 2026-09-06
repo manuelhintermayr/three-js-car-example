@@ -2,6 +2,12 @@
 
 A Three.js + Rapier port of the [Babylon.js Car Racing Game](https://github.com/manuelhintermayr/babylon-js-car-example): the same 3D car playground with realistic joint-based car physics, intelligent device detection, a custom 3D car model, dynamic lighting and a modular Vue.js component architecture. Only the engine underneath changed: **Babylon.js → Three.js** for rendering and **Havok → Rapier** for physics.
 
+## 🎮 Live Demo
+
+**Play now:** [https://projects.manuelhintermayr.com/threejs-rapier-car-example](https://projects.manuelhintermayr.com/threejs-rapier-car-example)
+
+The Babylon.js original runs at [https://projects.manuelhintermayr.com/babylon-js-car-example](https://projects.manuelhintermayr.com/babylon-js-car-example), so both versions can be compared side by side.
+
 ![Game Preview](preview.jpg)
 
 ## 🔁 What Was Ported
@@ -151,6 +157,11 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 - **Import maps** – dependency loading without a bundler
 
 ## 🚀 Getting Started
+
+### **🎮 Try It Now**
+**Live Demo:** [https://projects.manuelhintermayr.com/threejs-rapier-car-example](https://projects.manuelhintermayr.com/threejs-rapier-car-example)
+
+*No installation required - play directly in your browser!*
 
 ### **Prerequisites**
 - A modern browser with import map support (Chrome 89+, Firefox 108+, Safari 16.4+)
