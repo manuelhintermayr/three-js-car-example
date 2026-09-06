@@ -5,18 +5,23 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 
 /** Objects on this layer glow, everything else is rendered black while the bloom is computed */
 export const GLOW_LAYER = 1;
 
-const MAX_PIXEL_RATIO = 2;
-const MSAA_SAMPLES = 4;
+// Like the Babylon.js original, which renders at CSS pixel resolution regardless of the device pixel ratio
+const MAX_PIXEL_RATIO = 1;
+// Multisampled half-float targets are expensive on integrated GPUs, FXAA smooths the edges instead
+const MSAA_SAMPLES = 0;
 const BLOOM = { strength: 1.5, radius: 0.6, threshold: 0 };
 const BLOOM_BACKGROUND = new THREE.Color(0x000000);
-const REFLECTION_PROBE_SIZE = 256;
+const GLOW_RESOLUTION_SCALE = 0.25; // the blurred glow does not need full resolution
+const REFLECTION_PROBE_SIZE = 128;
 const REFLECTION_LEVEL = 1.5;
 const REFLECTION_NEAR = 1;
 const REFLECTION_FAR = 2000;
+const CUBE_FACES = 6;
 
 const MIX_VERTEX_SHADER = `
     varying vec2 vUv;
@@ -44,7 +49,18 @@ export function createRenderer(canvas) {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
+    // The scene is rendered several times per frame (reflection probe, glow, final image);
+    // the shadow map only needs to be rendered once, see requestShadowUpdate
+    renderer.shadowMap.autoUpdate = false;
     return renderer;
+}
+
+/**
+ * Renders the shadow map during the next render pass; call once at the start of every frame
+ * @param {THREE.WebGLRenderer} renderer
+ */
+export function requestShadowUpdate(renderer) {
+    renderer.shadowMap.needsUpdate = true;
 }
 
 /**
@@ -53,14 +69,15 @@ export function createRenderer(canvas) {
 export class GlowComposer {
     constructor(renderer) {
         const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+        const glowSize = size.clone().multiplyScalar(GLOW_RESOLUTION_SCALE).floor();
         this.renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
         this.darkMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
         this.hiddenMaterials = new Map();
 
-        this.bloomComposer = new EffectComposer(renderer, createHdrTarget(size, 0));
+        this.bloomComposer = new EffectComposer(renderer, createHdrTarget(glowSize, 0));
         this.bloomComposer.renderToScreen = false;
         this.bloomComposer.addPass(this.renderPass);
-        this.bloomComposer.addPass(new UnrealBloomPass(size, BLOOM.strength, BLOOM.radius, BLOOM.threshold));
+        this.bloomComposer.addPass(new UnrealBloomPass(glowSize, BLOOM.strength, BLOOM.radius, BLOOM.threshold));
 
         const mixPass = new ShaderPass(new THREE.ShaderMaterial({
             uniforms: {
@@ -76,6 +93,7 @@ export class GlowComposer {
         this.finalComposer.addPass(this.renderPass);
         this.finalComposer.addPass(mixPass);
         this.finalComposer.addPass(new OutputPass());
+        this.finalComposer.addPass(new FXAAPass());
     }
 
     setScene(scene, camera) {
@@ -84,7 +102,7 @@ export class GlowComposer {
     }
 
     setSize(width, height) {
-        this.bloomComposer.setSize(width, height);
+        this.bloomComposer.setSize(width * GLOW_RESOLUTION_SCALE, height * GLOW_RESOLUTION_SCALE);
         this.finalComposer.setSize(width, height);
     }
 
@@ -119,7 +137,8 @@ export class GlowComposer {
 }
 
 /**
- * Cube camera that follows the car body and feeds its material with live reflections
+ * Cube camera that follows the car body and feeds its material with live reflections.
+ * After the first full capture only one cube face is refreshed per frame, which keeps the cost flat.
  */
 export class ReflectionProbe {
     constructor() {
@@ -130,6 +149,8 @@ export class ReflectionProbe {
         });
         this.cubeCamera = new THREE.CubeCamera(REFLECTION_NEAR, REFLECTION_FAR, this.renderTarget);
         this.carBody = null;
+        this.nextFace = 0;
+        this.hasFullCapture = false;
     }
 
     attachToMesh(carBody) {
@@ -146,8 +167,28 @@ export class ReflectionProbe {
         // The car must not reflect itself, but its lights should still illuminate the reflection
         this.cubeCamera.position.copy(this.carBody.position);
         this.carBody.material.visible = false;
-        this.cubeCamera.update(renderer, scene);
+        if (this.hasFullCapture) {
+            this.renderNextFace(renderer, scene);
+        } else {
+            this.cubeCamera.update(renderer, scene);
+            this.hasFullCapture = true;
+        }
         this.carBody.material.visible = true;
+    }
+
+    renderNextFace(renderer, scene) {
+        this.cubeCamera.updateMatrixWorld();
+        const faceCamera = this.cubeCamera.children[this.nextFace];
+        const isLastFace = this.nextFace === CUBE_FACES - 1;
+        const previousTarget = renderer.getRenderTarget();
+
+        // Mipmaps cover all faces, so they are only rebuilt after the last face of a cycle
+        this.renderTarget.texture.generateMipmaps = isLastFace;
+        renderer.setRenderTarget(this.renderTarget, this.nextFace);
+        renderer.render(scene, faceCamera);
+        renderer.setRenderTarget(previousTarget);
+
+        this.nextFace = (this.nextFace + 1) % CUBE_FACES;
     }
 
     dispose() {

@@ -3,7 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 
 const GRAVITY = { x: 0, y: -150, z: 0 };
 const PHYSICS_TIMESTEP = 1 / 120;
-const MAX_STEPS_PER_FRAME = 4;
+const MAX_STEPS_PER_FRAME = 8; // keeps the simulation in real time down to 15 fps
 const SOLVER_ITERATIONS = 16; // keeps the jointed car straight even on the hard spawn landing
 const UNITS_PER_METER = 8; // the car is ~28 units long, so 1 meter is roughly 8 units
 

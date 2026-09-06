@@ -1,7 +1,7 @@
 // three-game.js - Three.js + Rapier game entry points used by index.js and the Vue app
 import * as THREE from 'three';
 import { initPhysicsEngine } from './physics-world.js';
-import { createRenderer, GlowComposer } from './rendering.js';
+import { createRenderer, requestShadowUpdate, GlowComposer } from './rendering.js';
 import { GameSession } from './game-session.js';
 import { FpsMeter } from './fps-meter.js';
 
@@ -76,6 +76,7 @@ async function startSession(vueApp) {
 
 function renderFrame() {
     timer.update();
+    requestShadowUpdate(renderer);
     session.update(timer.getDelta());
     glowComposer.render();
     fpsMeter.tick();

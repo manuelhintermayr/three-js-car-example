@@ -201,6 +201,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 - **Motors** – Rapier's joint motors use the force-based model with the original maximum forces, which gives the same acceleration profile and braking behaviour as the Havok velocity and position motors.
 - **Detection timings** – knocked-box and collision detection run on simulated physics time instead of wall-clock time, so a slow first frame or a hidden tab cannot produce phantom hits.
 - **Reset** – the loaded car model is cached, so resetting the game rebuilds scene and physics world without downloading the model again.
+- **Performance** – like the original, the canvas renders at CSS pixel resolution (device pixel ratio capped at 1). The shadow map is rendered once per frame instead of once per render pass, the glow is computed at half resolution and the reflection probe refreshes one cube face per frame after its first full capture. The physics stepper catches up with up to eight sub-steps per frame, so the simulation stays in real time even at low frame rates.
 
 ## 🤝 Contributing
 
