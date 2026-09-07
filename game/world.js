@@ -1,6 +1,7 @@
 // world.js - Static studio environment: track, walls, towers, bridge and the knockable boxes
 import * as THREE from 'three';
 import { RAPIER, COLLISION_GROUPS, syncMeshWithBody } from './physics-world.js';
+import { GLOW_LAYER } from './rendering.js';
 import { babylonColor } from './color.js';
 
 // Babylon.js is left-handed, Three.js right-handed: X positions taken from the original are mirrored
@@ -210,6 +211,7 @@ function createKnockableBoxes(scene, world) {
     const boxes = KNOCKABLE_BOX.positions.map((position, index) => {
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = `knockableBox_${index}`;
+        mesh.layers.enable(GLOW_LAYER); // orange boxes glow like the Babylon.js glow layer
         mesh.position.set(position.x, size / 2, position.z);
         scene.add(mesh);
 

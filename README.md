@@ -59,11 +59,12 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 
 ### 🏁 Core Gameplay
 - **Joint-based car physics** powered by [Rapier](https://rapier.rs/): every wheel is a rigid body with its own suspension, steering and spin joints
-- **Custom 3D car model** loaded with the Three.js `GLTFLoader` (model created with [ImgTo3D.ai](https://www.imgto3d.ai/), textures with [Meshy.ai](https://www.meshy.ai/))
+- **Hand-made low-poly car model** (Ford Anglia) loaded with the Three.js `GLTFLoader` and Draco decompression; its wheels, headlights, taillights, steering wheel and pedals are used directly by the game
 - **Convex hull collider** generated from the car mesh for accurate body collisions
 - **Follow camera** with mouse orbit and smooth acceleration
 - **Jump mechanics** with the Space key and precision **braking** with the B key
 - **Ackermann steering** – the inner wheel turns sharper than the outer wheel
+- **Animated cockpit** – the steering wheel turns and the pedal presses in time with the controls
 
 ### 🎯 Game Objectives & Environment
 - 🎯 **Knock down boxes** – Hit all 5 orange physics-enabled targets
@@ -144,9 +145,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
     ├── 📄 telemetry.js       # Speed, race timer, collision and box detection
     ├── 📄 color.js           # sRGB color helper for the original color values
     ├── 📁 models/
-    │   └── 📄 car.glb        # Custom 3D car model (GLB format)
-    └── 📁 textures/
-        └── 📄 tire.png       # Car tire texture
+    │   └── 📄 car.glb        # Hand-made Ford Anglia model (GLB, Draco-compressed)
 ```
 
 ## 🛠️ Technology Stack
@@ -224,7 +223,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 
 ## 📄 License
 
-The original source code of this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. The MIT License covers this repository's own source code; the third-party example code it builds on, the libraries it loads and the AI-generated 3D model and textures it uses are documented separately in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The original source code of this project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. The MIT License covers this repository's own source code; the third-party example code it builds on, the libraries it loads and the hand-made 3D car model it uses are documented separately in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## 🙏 Acknowledgments
 
@@ -232,9 +231,7 @@ The original source code of this project is licensed under the MIT License - see
 - **Three.js Team** – for the rendering engine and the post-processing examples
 - **Dimforge** – for the Rapier physics engine
 - **Vue.js Team** – for the reactive framework
-- **AI Tools** – for 3D model and texture creation:
-  - Car 3D model created with [ImgTo3D.ai](https://www.imgto3d.ai/)
-  - Car textures created with [Meshy.ai](https://www.meshy.ai/)
+- **3D car model** – the hand-made low-poly Ford Anglia by Manuel Hintermayr, created for the manuelhintermayr-portfolio project and reused here with attribution
 - **Babylon.js Community** – for the demos the original car physics and camera controls were based on:
   - Car physics implementation based on [Babylon.js Playground #ANV5OM#139](https://www.babylonjs-playground.com/#ANV5OM#139)
   - Mouse camera controls based on [Babylon.js Playground #FMQX86#1](https://playground.babylonjs.com/#FMQX86#1)

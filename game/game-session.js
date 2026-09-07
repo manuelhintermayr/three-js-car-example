@@ -52,6 +52,7 @@ export class GameSession {
 
     update(deltaSeconds) {
         this.controls.update();
+        this.car.updateVisuals(this.controls.getVisualState());
         this.stepper.step(deltaSeconds);
         this.car.syncMeshes();
         this.environment.syncMeshes();

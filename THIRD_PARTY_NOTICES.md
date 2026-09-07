@@ -36,17 +36,16 @@ the authoritative terms:
 - **[Rapier](https://rapier.rs/)** (`@dimforge/rapier3d-compat`) — Apache License 2.0
 - **[Vue.js](https://vuejs.org/)** — MIT
 
-## 4. 3D models and textures
+## 4. 3D model
 
-The following assets were generated with third-party AI tools for the original project,
-as documented in its README. Their provenance is recorded here exactly as documented; no
-license terms have been invented. Anyone wishing to reuse these assets should check the
-terms of the respective tool/service.
+The 3D car model is **hand-made** and is not covered by the code license above.
+It was modelled by Manuel Hintermayr for his personal **manuelhintermayr-portfolio**
+project and is reused here with attribution. If the model is used elsewhere, please
+credit that project as the source.
 
-| Asset | Origin (as documented in the original README) |
+| Asset | Origin |
 |---|---|
-| Car 3D model (`game/models/car.glb`) | Created with ImgTo3D.ai (<https://www.imgto3d.ai/>) |
-| Car textures (embedded in `car.glb`, tyre texture `game/textures/tire.png`) | Created with Meshy.ai (<https://www.meshy.ai/>) |
+| Car 3D model (`game/models/car.glb`) | Hand-made low-poly Ford Anglia by Manuel Hintermayr, created for the manuelhintermayr-portfolio project; Draco-compressed for the web |
 
 ## 5. Trademarks
 

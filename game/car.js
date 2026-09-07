@@ -1,35 +1,39 @@
 // car.js - Car assembly: chassis, suspension, steering and wheel joints on top of Rapier
 import * as THREE from 'three';
 import { RAPIER, COLLISION_GROUPS, syncMeshWithBody } from './physics-world.js';
-import { loadCarAssets } from './car-model.js';
-import { createWheelMesh, createAxleMesh } from './wheel-visuals.js';
-import { createHeadlights, createTaillights } from './car-lights.js';
+import { loadCarModel } from './car-model.js';
+import { createCarLights } from './car-lights.js';
 
 const SPAWN_POSITION = { x: 0, y: 5, z: 0 };
 const CHASSIS = {
     mass: 5000,
     restitution: 0,
     friction: 0.8,
+    // Centre of mass just above the wheel contact patch keeps the car planted without rolling over
     centerOfMass: { x: 0, y: -2.5, z: 1 },
     additionalSolverIterations: 4
 };
 // The car drives towards +Z in Three.js' right-handed world, so +X is the car's left side
-const WHEEL_LAYOUT = [
-    { name: 'frontLeft', x: 5, z: 8, isSteered: true, isPowered: true },
-    { name: 'frontRight', x: -5, z: 8, isSteered: true, isPowered: true },
-    { name: 'rearLeft', x: 5, z: -8, isSteered: false, isPowered: false },
-    { name: 'rearRight', x: -5, z: -8, isSteered: false, isPowered: false }
+const WHEEL_CORNERS = [
+    { name: 'frontLeft', signX: 1, signZ: 1, isSteered: true, isPowered: true },
+    { name: 'frontRight', signX: -1, signZ: 1, isSteered: true, isPowered: true },
+    { name: 'rearLeft', signX: 1, signZ: -1, isSteered: false, isPowered: false },
+    { name: 'rearRight', signX: -1, signZ: -1, isSteered: false, isPowered: false }
 ];
 const WHEEL_HEIGHT = 0;
-const WHEEL = { mass: 150, restitution: 0, friction: 2.5, radius: 2, width: 1.6 };
+const WHEEL = { mass: 150, restitution: 0, friction: 2.5, width: 1.6 };
 const AXLE = { mass: 190, radius: 1.8, width: 1.6, steeringMassShare: 0.5 };
 // Soft spring like the original: the chassis sags roughly 2 units under its own weight
 const SUSPENSION = { maxTravel: 3, stiffness: 100_000, damping: 1_500 };
 // Stiff enough to re-center the wheels against tyre friction while standing still
 const STEERING_MOTOR = { stiffness: 20_000_000, damping: 400_000, maxForce: 60_000_000 };
-const DRIVE_MOTOR = { damping: 1_000_000, maxForce: 330_000, brakeForce: 1_000_000 }; // rigid velocity motor, only limited by its force cap
+const DRIVE_MOTOR = { damping: 1_000_000, maxForce: 330_000, brakeForce: 1_000_000 };
 const JUMP_FORCE = 3000;
-const ACKERMANN = { wheelbase: 16, trackWidth: 11 };
+
+// Visual animation of the cockpit
+const STEERING_WHEEL_RATIO = 4; // dashboard wheel turns further than the road wheels
+const PEDAL_PRESS_ANGLE = 0.5; // radians the pedal rotates when pressed
+const PEDAL_SMOOTHING = 0.25;
 
 const ORIGIN = { x: 0, y: 0, z: 0 };
 const AXIS_X = { x: 1, y: 0, z: 0 };
@@ -39,15 +43,19 @@ const IDENTITY_ROTATION = { x: 0, y: 0, z: 0, w: 1 };
 const CYLINDER_TO_X_AXIS = { x: 0, y: 0, z: -Math.SQRT1_2, w: Math.SQRT1_2 };
 
 export class Car {
-    constructor({ mesh, body, wheelAssemblies }) {
+    constructor({ mesh, body, wheelAssemblies, cockpit, ackermann }) {
         this.mesh = mesh;
         this.body = body;
         this.wheelAssemblies = wheelAssemblies;
+        this.cockpit = cockpit;
+        this.ackermann = ackermann;
+        this.pedalPress = 0;
         this.driveJoints = wheelAssemblies.filter(wheel => wheel.driveJoint).map(wheel => wheel.driveJoint);
         this.steeringJoints = {
             left: wheelAssemblies.find(wheel => wheel.name === 'frontLeft').steeringJoint,
             right: wheelAssemblies.find(wheel => wheel.name === 'frontRight').steeringJoint
         };
+        this._forward = new THREE.Vector3();
     }
 
     get position() {
@@ -60,7 +68,7 @@ export class Car {
 
     /** @returns {number} heading around the Y axis in radians */
     yaw() {
-        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.mesh.quaternion);
+        const forward = this._forward.set(0, 0, 1).applyQuaternion(this.mesh.quaternion);
         return Math.atan2(forward.x, forward.z);
     }
 
@@ -78,7 +86,7 @@ export class Car {
     }
 
     setSteeringAngle(averageAngle) {
-        const [innerAngle, outerAngle] = calculateWheelAngles(averageAngle);
+        const [innerAngle, outerAngle] = this.ackermann(averageAngle);
         this.steeringJoints.left.configureMotorPosition(innerAngle, STEERING_MOTOR.stiffness, STEERING_MOTOR.damping);
         this.steeringJoints.right.configureMotorPosition(outerAngle, STEERING_MOTOR.stiffness, STEERING_MOTOR.damping);
     }
@@ -101,8 +109,20 @@ export class Car {
     syncMeshes() {
         syncMeshWithBody(this.mesh, this.body);
         for (const wheel of this.wheelAssemblies) {
-            wheel.syncMeshes();
+            wheel.syncMesh();
         }
+    }
+
+    /**
+     * Turns the dashboard steering wheel and presses the pedal in time with the controls.
+     * The road wheels animate on their own because their meshes follow the physics wheel bodies.
+     * @param {{ steerAngle: number, isPedalPressed: boolean }} input
+     */
+    updateVisuals(input) {
+        this.cockpit.steeringWheel.rotation.z = -input.steerAngle * STEERING_WHEEL_RATIO;
+        const target = input.isPedalPressed ? PEDAL_PRESS_ANGLE : 0;
+        this.pedalPress += (target - this.pedalPress) * PEDAL_SMOOTHING;
+        this.cockpit.pedal.rotation.x = this.pedalPress;
     }
 }
 
@@ -113,37 +133,59 @@ export class Car {
  * @returns {Promise<Car>}
  */
 export async function createCar(scene, world) {
-    const assets = await loadCarAssets();
+    const model = await loadCarModel();
 
-    const mesh = new THREE.Mesh(assets.geometry, assets.material);
+    const mesh = new THREE.Mesh(model.bodyGeometry, model.bodyMaterial);
     mesh.name = 'CarBody';
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.position.set(SPAWN_POSITION.x, SPAWN_POSITION.y, SPAWN_POSITION.z);
     scene.add(mesh);
 
-    const body = createChassisBody(world, assets);
-    const wheelAssemblies = WHEEL_LAYOUT.map(layout => createWheelAssembly(scene, world, body, layout));
+    const body = createChassisBody(world, model);
+    const wheelsByCorner = new Map(model.wheels.map(wheel => [wheel.corner, wheel]));
+    const wheelAssemblies = WHEEL_CORNERS.map(corner =>
+        createWheelAssembly(scene, world, body, corner, model, wheelsByCorner.get(corner.name))
+    );
 
-    createTaillights(mesh);
-    createHeadlights(mesh);
+    const cockpit = buildCockpit(mesh, model);
+    createCarLights(mesh, model);
 
-    return new Car({ mesh, body, wheelAssemblies });
+    return new Car({ mesh, body, wheelAssemblies, cockpit, ackermann: makeAckermann(model) });
 }
 
-function createChassisBody(world, assets) {
+/** Adds the steering wheel and pedal to the body as animatable pivots. */
+function buildCockpit(bodyMesh, model) {
+    const steeringWheel = createPivotMesh(model.steeringWheel, model.bodyMaterial);
+    const pedal = createPivotMesh(model.pedal, model.bodyMaterial);
+    bodyMesh.add(steeringWheel, pedal);
+    return { steeringWheel, pedal };
+}
+
+/** A group placed at the part's pivot, carrying its tilt, with the recentred mesh inside. */
+function createPivotMesh(part, material) {
+    const group = new THREE.Group();
+    group.position.copy(part.pivot);
+    group.quaternion.copy(part.orientation);
+    const mesh = new THREE.Mesh(part.geometry, material);
+    mesh.castShadow = true;
+    group.add(mesh);
+    return group;
+}
+
+function createChassisBody(world, model) {
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(SPAWN_POSITION.x, SPAWN_POSITION.y, SPAWN_POSITION.z)
         .setCanSleep(false)
         .setAdditionalSolverIterations(CHASSIS.additionalSolverIterations);
     const body = world.createRigidBody(bodyDesc);
 
-    const colliderDesc = RAPIER.ColliderDesc.convexHull(assets.hullPoints);
+    const colliderDesc = RAPIER.ColliderDesc.convexHull(model.hullPoints);
     if (!colliderDesc) {
         throw new Error('Convex hull for the car body could not be created');
     }
     colliderDesc
-        .setMassProperties(CHASSIS.mass, CHASSIS.centerOfMass, boxInertia(CHASSIS.mass, assets.size), IDENTITY_ROTATION)
+        .setMassProperties(CHASSIS.mass, CHASSIS.centerOfMass, boxInertia(CHASSIS.mass, model.size), IDENTITY_ROTATION)
         .setFriction(CHASSIS.friction)
         .setRestitution(CHASSIS.restitution)
         .setCollisionGroups(COLLISION_GROUPS.CarParts);
@@ -156,8 +198,8 @@ function createChassisBody(world, assets) {
  * Front: chassis -[revolute Y: steering]- knuckle -[prismatic Y: suspension]- axle -[revolute X: spin]- wheel
  * Rear:  chassis -[prismatic Y: suspension]- axle -[revolute X: spin]- wheel
  */
-function createWheelAssembly(scene, world, chassisBody, layout) {
-    const position = { x: layout.x, y: WHEEL_HEIGHT, z: layout.z };
+function createWheelAssembly(scene, world, chassisBody, corner, model, wheelPart) {
+    const position = { x: corner.signX * model.halfTrack, y: WHEEL_HEIGHT, z: corner.signZ * model.halfWheelbase };
     const anchorOnChassis = {
         x: position.x - SPAWN_POSITION.x,
         y: position.y - SPAWN_POSITION.y,
@@ -168,7 +210,7 @@ function createWheelAssembly(scene, world, chassisBody, layout) {
     let anchorOnParent = anchorOnChassis;
     let axleMass = AXLE.mass;
     let steeringJoint = null;
-    if (layout.isSteered) {
+    if (corner.isSteered) {
         const knuckleBody = createMassOnlyBody(world, position, AXLE.mass * AXLE.steeringMassShare);
         steeringJoint = createSteeringJoint(world, chassisBody, knuckleBody, anchorOnChassis);
         suspensionParent = knuckleBody;
@@ -179,21 +221,21 @@ function createWheelAssembly(scene, world, chassisBody, layout) {
     const axleBody = createMassOnlyBody(world, position, axleMass);
     createSuspensionJoint(world, suspensionParent, axleBody, anchorOnParent);
 
-    const wheelBody = createWheelBody(world, position);
+    const wheelBody = createWheelBody(world, position, model.wheelRadius);
     const spinJoint = world.createImpulseJoint(RAPIER.JointData.revolute(ORIGIN, ORIGIN, AXIS_X), axleBody, wheelBody, true);
-    const driveJoint = layout.isPowered ? configureDriveMotor(spinJoint) : null;
+    const driveJoint = corner.isPowered ? configureDriveMotor(spinJoint) : null;
 
-    const wheelMesh = createWheelMesh();
-    const axleMesh = createAxleMesh();
-    scene.add(wheelMesh, axleMesh);
+    const wheelMesh = new THREE.Mesh(wheelPart.geometry, model.bodyMaterial);
+    wheelMesh.name = `Wheel_${corner.name}`;
+    wheelMesh.castShadow = true;
+    scene.add(wheelMesh);
 
     return {
-        name: layout.name,
+        name: corner.name,
         driveJoint,
         steeringJoint,
-        syncMeshes() {
+        syncMesh() {
             syncMeshWithBody(wheelMesh, wheelBody);
-            syncMeshWithBody(axleMesh, axleBody);
         }
     };
 }
@@ -233,13 +275,13 @@ function createMassOnlyBody(world, position, mass) {
     return world.createRigidBody(bodyDesc);
 }
 
-function createWheelBody(world, position) {
+function createWheelBody(world, position, radius) {
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(position.x, position.y, position.z)
         .setCanSleep(false);
     const body = world.createRigidBody(bodyDesc);
 
-    const colliderDesc = RAPIER.ColliderDesc.cylinder(WHEEL.width / 2, WHEEL.radius)
+    const colliderDesc = RAPIER.ColliderDesc.cylinder(WHEEL.width / 2, radius)
         .setRotation(CYLINDER_TO_X_AXIS)
         .setMass(WHEEL.mass)
         .setFriction(WHEEL.friction)
@@ -267,11 +309,14 @@ function boxInertia(mass, size) {
     };
 }
 
-/** Ackermann steering: the inner wheel turns sharper than the outer wheel */
-function calculateWheelAngles(averageAngle) {
-    const { wheelbase, trackWidth } = ACKERMANN;
-    const averageRadius = wheelbase / Math.tan(averageAngle);
-    const innerRadius = averageRadius - trackWidth / 2;
-    const outerRadius = averageRadius + trackWidth / 2;
-    return [Math.atan(wheelbase / innerRadius), Math.atan(wheelbase / outerRadius)];
+/** Ackermann steering derived from the model's wheelbase and track: the inner wheel turns sharper */
+function makeAckermann(model) {
+    const wheelbase = 2 * model.halfWheelbase;
+    const trackWidth = 2 * model.halfTrack;
+    return (averageAngle) => {
+        const averageRadius = wheelbase / Math.tan(averageAngle);
+        const innerRadius = averageRadius - trackWidth / 2;
+        const outerRadius = averageRadius + trackWidth / 2;
+        return [Math.atan(wheelbase / innerRadius), Math.atan(wheelbase / outerRadius)];
+    };
 }
