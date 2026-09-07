@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This document lists third-party code and assets used by
-**threejs-car-example**, and separates them from the project's own source code.
+**three-js-car-example**, and separates them from the project's own source code.
 
 ## 1. Own source code
 
