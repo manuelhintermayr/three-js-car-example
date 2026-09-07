@@ -75,6 +75,7 @@ export class GlowComposer {
         this.renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
         this.darkMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
         this.hiddenMaterials = new Map();
+        this.dimmedMeshes = null; // rebuilt lazily per scene; the set is stable once the scene is built
 
         this.bloomComposer = new EffectComposer(renderer, createHdrTarget(glowSize, 0));
         this.bloomComposer.renderToScreen = false;
@@ -101,6 +102,7 @@ export class GlowComposer {
     setScene(scene, camera) {
         this.renderPass.scene = scene;
         this.renderPass.camera = camera;
+        this.dimmedMeshes = null; // the next render rebuilds the list for the new scene
     }
 
     setSize(width, height) {
@@ -110,31 +112,25 @@ export class GlowComposer {
 
     render() {
         const scene = this.renderPass.scene;
+        if (!this.dimmedMeshes) {
+            this.dimmedMeshes = collectNonGlowingMeshes(scene);
+        }
         const background = scene.background;
 
         // A black background is required: the renderer keeps the last background as its clear color
         scene.background = BLOOM_BACKGROUND;
-        scene.traverse(object => this.hideUnlessGlowing(object));
+        for (const mesh of this.dimmedMeshes) {
+            this.hiddenMaterials.set(mesh, mesh.material);
+            mesh.material = this.darkMaterial;
+        }
         this.bloomComposer.render();
-        scene.traverse(object => this.restoreMaterial(object));
+        for (const mesh of this.dimmedMeshes) {
+            mesh.material = this.hiddenMaterials.get(mesh);
+        }
+        this.hiddenMaterials.clear();
         scene.background = background;
 
         this.finalComposer.render();
-    }
-
-    hideUnlessGlowing(object) {
-        if (object.isMesh && !object.layers.isEnabled(GLOW_LAYER)) {
-            this.hiddenMaterials.set(object, object.material);
-            object.material = this.darkMaterial;
-        }
-    }
-
-    restoreMaterial(object) {
-        const material = this.hiddenMaterials.get(object);
-        if (material) {
-            object.material = material;
-            this.hiddenMaterials.delete(object);
-        }
     }
 }
 
@@ -196,6 +192,17 @@ export class ReflectionProbe {
     dispose() {
         this.renderTarget.dispose();
     }
+}
+
+/** The meshes not on the glow layer, dimmed to black while the bloom is computed */
+function collectNonGlowingMeshes(scene) {
+    const meshes = [];
+    scene.traverse(object => {
+        if (object.isMesh && !object.layers.isEnabled(GLOW_LAYER)) {
+            meshes.push(object);
+        }
+    });
+    return meshes;
 }
 
 function createHdrTarget(size, samples) {
