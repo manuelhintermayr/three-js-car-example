@@ -47,6 +47,10 @@ async function loadAndPrepare() {
 
     const meshes = classifyMeshes(root);
     const material = markShared(pickMaterial(meshes));
+    // Match the Babylon PBR look: a strongly metallic paint that mirrors the reflection probe. Three.js needs
+    // a high metalness and low roughness for the envMap to read as clearly as Babylon's PBRMaterial does.
+    material.metalness = 0.85;
+    material.roughness = 0.25;
 
     // Measure the model's raw half-track, then scale so it matches the physics rig
     const rawFront = splitWheelPair(meshes.frontWheels, new THREE.Matrix4(), WHEEL_CORNERS.front);
