@@ -15,12 +15,13 @@ const BODY_DROP = 1.8;
 // The steering hub mesh also holds a fixed arm reaching to the dashboard. In raw model units the hub and
 // spokes sit within this distance of the ring plane along the column axis; the arm lies beyond it.
 const COLUMN_SPLIT_AXIAL = 0.04;
+const STEERING_COLUMN_NODE = 'Cube.075'; // the hub node that carries this arm
 
 // Node names inside the model (stable, preserved through Draco compression). Everything not listed is body.
 const PART_NAMES = {
     frontWheels: ['Cylinder.023'],
     rearWheels: ['Cylinder.024'],
-    steeringWheel: ['Torus.002', 'Cube.074', 'Cube.075'],
+    steeringWheel: ['Torus.002', 'Cube.074', STEERING_COLUMN_NODE],
     gasPedal: ['Cube.067', 'Cube.068'],
     brakePedal: ['Cube.065', 'Cube.066'],
     shifter: ['Cylinder.030'],
@@ -69,7 +70,7 @@ async function loadAndPrepare() {
     const bodyGeometry = markShared(mergeBaked(meshes.body, bake));
     bodyGeometry.computeBoundingBox();
 
-    console.log('✅ Ford Anglia prepared: body + 4 wheels + steering wheel + pedal + lights');
+    console.log('✅ Ford Anglia prepared: body + 4 wheels + steering wheel + pedals + gear lever + lights');
     return {
         bodyGeometry,
         bodyMaterial: material,
@@ -97,18 +98,22 @@ function createLoader() {
 }
 
 /** Buckets every mesh of the model into its game part by node name (loaders may drop the dots). */
+/** GLTFLoader strips the dots from node names, so both sides are compared without them */
+function normalizeNodeName(name) {
+    return name.replace(/\./g, '');
+}
+
 function classifyMeshes(root) {
-    const normalize = (name) => name.replace(/\./g, '');
     const lookup = new Map();
     for (const [part, names] of Object.entries(PART_NAMES)) {
         for (const name of names) {
-            lookup.set(normalize(name), part);
+            lookup.set(normalizeNodeName(name), part);
         }
     }
     const buckets = { body: [], frontWheels: [], rearWheels: [], steeringWheel: [], gasPedal: [], brakePedal: [], shifter: [], headlights: [], taillights: [], glass: [] };
     root.traverse(object => {
         if (object.isMesh) {
-            buckets[lookup.get(normalize(object.name)) ?? 'body'].push(object);
+            buckets[lookup.get(normalizeNodeName(object.name)) ?? 'body'].push(object);
         }
     });
     if (buckets.frontWheels.length === 0 || buckets.rearWheels.length === 0) {
@@ -206,17 +211,17 @@ function buildSteeringWheel(meshes, bake) {
     const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(ring.getWorldQuaternion(new THREE.Quaternion())).normalize();
 
     // Ring centre: in world space for the axial split, in car-frame (the pivot) so the wheel spins in place.
+    // The bake is a uniform scale plus translations, so the centre maps straight into car-frame coordinates.
     const ringWorld = ring.geometry.clone().applyMatrix4(ring.matrixWorld);
     ringWorld.computeBoundingBox();
     const center = ringWorld.boundingBox.getCenter(new THREE.Vector3());
-    const ringBaked = ringWorld.clone().applyMatrix4(bake);
-    ringBaked.computeBoundingBox();
-    const pivot = ringBaked.boundingBox.getCenter(new THREE.Vector3());
+    const pivot = center.clone().applyMatrix4(bake);
 
-    // The hub mesh (Cube.075) bundles the spinning hub + spokes with a fixed arm reaching the dashboard.
+    // The hub mesh bundles the spinning hub + spokes with a fixed arm reaching the dashboard.
     // Split it by distance from the ring plane along the column axis: the near part spins, the arm stays.
-    const column = meshes.find(mesh => mesh.name.replace(/\./g, '').startsWith('Cube075'));
+    const column = meshes.find(mesh => normalizeNodeName(mesh.name).startsWith(normalizeNodeName(STEERING_COLUMN_NODE)));
     const axialOf = (x, y, z) => (x - center.x) * axis.x + (y - center.y) * axis.y + (z - center.z) * axis.z;
+    // Re-extracting with an always-true predicate gives every part the same attribute layout for mergeGeometries
     const bakeAndNormalize = geometry => filterTriangles(geometry.applyMatrix4(bake), () => true);
 
     const spinning = [];

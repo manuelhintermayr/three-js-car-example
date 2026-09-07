@@ -53,7 +53,6 @@ export class Car {
         this.body = body;
         this.wheelAssemblies = wheelAssemblies;
         this.cockpit = cockpit;
-        this.cockpitRig = cockpit.rig;
         this.ackermann = ackermann;
         this.gasPress = 0;
         this.brakePress = 0;
@@ -123,8 +122,8 @@ export class Car {
 
     /**
      * Turns the dashboard steering wheel in time with the controls; the road wheels animate on their own
-     * because their meshes follow the physics wheel bodies. The pedal and gear lever animate only in the
-     * interior view, where they are actually visible.
+     * because their meshes follow the physics wheel bodies. The gear lever rocks in every view, the pedals
+     * only in the interior view, where they are actually visible.
      * @param {{ steerAngle: number, forward: boolean, backward: boolean, brake: boolean }} input
      * @param {boolean} inCockpit
      */
@@ -203,7 +202,7 @@ function addGlass(bodyMesh, model) {
     bodyMesh.add(glass);
 }
 
-/** Adds the steering wheel, pedal and gear lever to the body; the steering wheel spins around its column axis. */
+/** Adds the steering wheel, pedals and gear lever to the body; the steering wheel spins around its column axis. */
 function buildCockpit(bodyMesh, model) {
     bodyMesh.material.side = THREE.DoubleSide; // so the interior renders when the cockpit camera is inside
 
@@ -226,7 +225,14 @@ function buildCockpit(bodyMesh, model) {
         bodyMesh.add(column);
     }
 
-    return { steeringWheel, steeringAxis: model.steeringWheel.axis, gasPedalGroup, brakePedalGroup, shifterGroup, rig: cockpitRig(model) };
+    return {
+        steeringWheel,
+        steeringAxis: model.steeringWheel.axis,
+        gasPedalGroup,
+        brakePedalGroup,
+        shifterGroup,
+        rig: cockpitRig(model)
+    };
 }
 
 /** Driver's-eye camera rig in the body's local frame: where the eye sits and the point it looks at. */
