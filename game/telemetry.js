@@ -7,6 +7,8 @@ const RACE_START_SPEED = 2;
 const COLLISION = { speedDrop: 5, minimumPreviousSpeed: 2, cooldownSeconds: 0.5 };
 const BOX = { settleTimeSeconds: 2, knockDistance: 3, cooldownSeconds: 1 };
 const FULL_CIRCLE_DEGREES = 360;
+// Every write to the reactive HUD re-renders it; 20 Hz keeps the readouts smooth without doing that on every frame
+const HUD_UPDATE_INTERVAL_MS = 50;
 
 export class Telemetry {
     /**
@@ -24,6 +26,8 @@ export class Telemetry {
         this.raceStarted = false;
         this.raceStartTime = 0;
         this.lastSpeed = 0;
+        this.peakSpeed = 0;
+        this.nextHudUpdate = 0;
         this.lastCollisionTime = -Infinity;
         this.lastKnockTimes = new Map();
     }
@@ -32,12 +36,24 @@ export class Telemetry {
         const velocity = this.car.linearVelocity();
         const rawSpeed = Math.hypot(velocity.x, velocity.y, velocity.z);
         const speed = rawSpeed < SPEED_DEADZONE ? 0 : rawSpeed;
+        this.peakSpeed = Math.max(this.peakSpeed, speed);
 
-        this.updateVehicleData(speed);
-        this.updateRaceTimer(speed);
+        this.startRaceWhenMoving(speed);
         this.detectCollision(rawSpeed);
         this.detectKnockedBoxes();
         this.lastSpeed = rawSpeed;
+        this.updateHud(speed);
+    }
+
+    /** Writes the readouts at HUD rate; the detection above still runs on every frame */
+    updateHud(speed) {
+        const now = performance.now();
+        if (now < this.nextHudUpdate) {
+            return;
+        }
+        this.nextHudUpdate = now + HUD_UPDATE_INTERVAL_MS;
+        this.updateVehicleData(speed);
+        this.updateRaceTimer();
     }
 
     updateVehicleData(speed) {
@@ -49,17 +65,21 @@ export class Telemetry {
         vueApp.position.y = position.y;
         vueApp.position.z = position.z;
         vueApp.rotation = THREE.MathUtils.radToDeg(this.car.yaw()) % FULL_CIRCLE_DEGREES;
-        vueApp.maxSpeed = Math.max(vueApp.maxSpeed, speed);
+        vueApp.maxSpeed = Math.max(vueApp.maxSpeed, this.peakSpeed);
     }
 
-    updateRaceTimer(speed) {
-        // Auto-start race when car starts moving
-        if (!this.raceStarted && speed > RACE_START_SPEED) {
-            console.log('Race started automatically - car is moving!');
-            this.raceStarted = true;
-            this.raceStartTime = Date.now();
-            this.vueApp.isRacing = true;
+    /** Auto-starts the race when the car starts moving */
+    startRaceWhenMoving(speed) {
+        if (this.raceStarted || speed <= RACE_START_SPEED) {
+            return;
         }
+        console.log('Race started automatically - car is moving!');
+        this.raceStarted = true;
+        this.raceStartTime = Date.now();
+        this.vueApp.isRacing = true;
+    }
+
+    updateRaceTimer() {
         if (this.raceStarted && this.vueApp.isRacing) {
             this.vueApp.raceTime = (Date.now() - this.raceStartTime) / 1000;
         }
