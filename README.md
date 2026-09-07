@@ -59,12 +59,12 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 
 ### 🏁 Core Gameplay
 - **Joint-based car physics** powered by [Rapier](https://rapier.rs/): every wheel is a rigid body with its own suspension, steering and spin joints
-- **Hand-made low-poly car model** (Ford Anglia) loaded with the Three.js `GLTFLoader` and Draco decompression; its wheels, headlights, taillights, steering wheel and pedals are used directly by the game
+- **Hand-made low-poly car model** (Ford Anglia) loaded with the Three.js `GLTFLoader` and Draco decompression; its wheels, headlights, taillights, steering wheel, pedals and gear lever are used directly by the game
 - **Convex hull collider** generated from the car mesh for accurate body collisions
-- **Follow camera** with mouse orbit and smooth acceleration
+- **Follow camera** with mouse orbit and smooth acceleration, plus a **cockpit view** through the windshield (C key)
 - **Jump mechanics** with the Space key and precision **braking** with the B key
 - **Ackermann steering** – the inner wheel turns sharper than the outer wheel
-- **Animated cockpit** – the steering wheel turns and the pedal presses in time with the controls
+- **Animated cockpit** – the steering wheel turns and the gear lever rocks in time with the controls; in the cockpit view the pedals press too
 
 ### 🎯 Game Objectives & Environment
 - 🎯 **Knock down boxes** – Hit all 5 orange physics-enabled targets
@@ -93,6 +93,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 - **WASD / Arrow Keys** for movement with real-time visual feedback
 - **Space Bar** for jumping
 - **B Key** for braking
+- **C Key** to toggle between the follow camera and the cockpit view
 - **Mouse drag** for 360° camera rotation around the vehicle
 - **Enter Key** for an instant game reset
 - **F12 / Backtick** for the debug panel toggle
@@ -199,7 +200,7 @@ The gameplay numbers stay the same: speed ramps, steering steps, jump impulses, 
 ## 🎮 How to Play
 
 1. **🏁 Start the Game** – open the page, the car drops onto the track; use `F12` or `` ` `` to open the debug panels
-2. **🚗 Master the Controls** – WASD to drive, Space to jump, B to brake, mouse drag to orbit the camera
+2. **🚗 Master the Controls** – WASD to drive, Space to jump, B to brake, C for the cockpit view, mouse drag to orbit the camera
 3. **🎯 Complete Objectives** – knock over the 5 orange boxes, avoid the towers, jump onto the bridge
 4. **🏆 Push the Limits** – the car accelerates hard and can be launched with a held jump key
 
