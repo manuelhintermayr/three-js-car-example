@@ -68,6 +68,14 @@ export function resetBoxes(vueApp) {
     session?.environment.resetBoxes();
 }
 
+/** Toggles the camera view from outside the render loop (e.g. the mobile View button). */
+export function toggleView() {
+    const camera = session?.followCamera;
+    if (camera) {
+        camera.setCockpit(!camera.cockpit);
+    }
+}
+
 async function startSession(vueApp) {
     session = await GameSession.create(canvas, renderer, vueApp);
     glowComposer.setScene(session.scene, session.camera);

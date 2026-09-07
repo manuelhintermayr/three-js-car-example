@@ -1,6 +1,6 @@
 // vue-app.js - Vue Application Logic and Components
 
-import { resetGame, resetBoxes } from './game/three-game.js';
+import { resetGame, resetBoxes, toggleView } from './game/three-game.js';
 import { InfoPanel } from './components/info-panel.js';
 import { DesktopControls } from './components/desktop-controls.js';
 import { MobileControls } from './components/mobile-controls.js';
@@ -143,6 +143,10 @@ export function createVueApp() {
 
             onMobileReset() {
                 this.resetGame();
+            },
+
+            onToggleView() {
+                toggleView();
             }
         }
     });
