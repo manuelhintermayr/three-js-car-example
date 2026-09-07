@@ -27,6 +27,8 @@ export class FollowCamera {
         this.canvas = canvas;
         this.cockpit = false;
         this.cockpitRig = null;
+        // Reused every frame instead of allocating fresh vectors in the update
+        this.scratch = { goal: new THREE.Vector3(), forward: new THREE.Vector3(), eye: new THREE.Vector3(), look: new THREE.Vector3() };
 
         this.onPointerDown = () => { this.isMouseDown = true; };
         this.onPointerUp = () => { this.isMouseDown = false; };
@@ -76,8 +78,7 @@ export class FollowCamera {
             return;
         }
 
-        const goal = this.computeGoalPosition();
-        const velocity = goal.sub(this.camera.position);
+        const velocity = this.computeGoalPosition(this.scratch.goal).sub(this.camera.position);
         velocity.x = clampSpeed(velocity.x * FOLLOW.cameraAcceleration * 2);
         velocity.y = clampSpeed(velocity.y * FOLLOW.cameraAcceleration);
         velocity.z = clampSpeed(velocity.z * FOLLOW.cameraAcceleration * 2);
@@ -93,20 +94,21 @@ export class FollowCamera {
     updateCockpit() {
         const car = this.lockedTarget;
         car.updateWorldMatrix(true, false);
-        this.camera.position.copy(this.cockpitRig.eye.clone().applyMatrix4(car.matrixWorld));
+        this.camera.position.copy(this.scratch.eye.copy(this.cockpitRig.eye).applyMatrix4(car.matrixWorld));
         this.camera.up.set(0, 1, 0).applyQuaternion(car.quaternion);
-        this.camera.lookAt(this.cockpitRig.look.clone().applyMatrix4(car.matrixWorld));
+        this.camera.lookAt(this.scratch.look.copy(this.cockpitRig.look).applyMatrix4(car.matrixWorld));
     }
 
-    computeGoalPosition() {
+    /** The camera's goal position behind the car, written into `goal`. */
+    computeGoalPosition(goal) {
         const target = this.lockedTarget.position;
-        const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.lockedTarget.quaternion);
+        const forward = this.scratch.forward.set(0, 0, 1).applyQuaternion(this.lockedTarget.quaternion);
         const yaw = Math.atan2(forward.x, forward.z);
         // Babylon.js uses sin/cos(rotationOffset + yaw) in its left-handed system; with the X axis
         // mirrored for Three.js the yaw changes sign, which keeps the orbit direction identical.
         const angle = yaw - THREE.MathUtils.degToRad(this.rotationOffset);
 
-        return new THREE.Vector3(
+        return goal.set(
             target.x + Math.sin(angle) * FOLLOW.radius,
             target.y + FOLLOW.heightOffset,
             target.z + Math.cos(angle) * FOLLOW.radius

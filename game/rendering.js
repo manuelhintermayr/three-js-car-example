@@ -44,7 +44,9 @@ const MIX_FRAGMENT_SHADER = `
  * @returns {THREE.WebGLRenderer}
  */
 export function createRenderer(canvas) {
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    // No multisampled canvas: the image arrives through the composer and FXAA smooths it, so a
+    // multisampled default framebuffer would only be resolved for nothing on every frame
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;

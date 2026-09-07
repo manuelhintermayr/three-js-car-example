@@ -35,7 +35,9 @@ export class CarControls {
         this.pressed = { forward: false, backward: false, left: false, right: false, brake: false, jump: false };
         this.currentSpeed = 0;
         this.currentSteeringAngle = 0;
-        this.lastInput = { forward: false, backward: false, brake: false };
+        // Reused every frame instead of allocating new input objects
+        this.input = { forward: false, backward: false, left: false, right: false, brake: false, jump: false };
+        this.visualState = { steerAngle: 0, forward: false, backward: false, brake: false };
 
         this.onKeyDown = (event) => this.handleKey(event, true);
         this.onKeyUp = (event) => this.handleKey(event, false);
@@ -71,7 +73,6 @@ export class CarControls {
     /** Applies the combined keyboard and touch input to the car, once per rendered frame */
     update() {
         const input = this.combineInputs();
-        this.lastInput = input;
 
         if (input.jump) {
             this.car.holdJump();
@@ -85,26 +86,27 @@ export class CarControls {
         this.car.setSteeringAngle(this.currentSteeringAngle);
     }
 
-    /** Cockpit animation state for the steering wheel, pedal and gear lever. */
+    /** Cockpit animation state for the steering wheel, pedals and gear lever. */
     getVisualState() {
-        return {
-            steerAngle: this.currentSteeringAngle,
-            forward: this.lastInput.forward,
-            backward: this.lastInput.backward,
-            brake: this.lastInput.brake
-        };
+        const state = this.visualState;
+        state.steerAngle = this.currentSteeringAngle;
+        state.forward = this.input.forward;
+        state.backward = this.input.backward;
+        state.brake = this.input.brake;
+        return state;
     }
 
+    /** Merges the keyboard and touch input into the reused input object. */
     combineInputs() {
         const touch = this.vueApp.touchControls;
-        return {
-            forward: this.pressed.forward || Boolean(touch.forward),
-            backward: this.pressed.backward || Boolean(touch.backward),
-            left: this.pressed.left || Boolean(touch.left),
-            right: this.pressed.right || Boolean(touch.right),
-            brake: this.pressed.brake || Boolean(touch.brake),
-            jump: this.pressed.jump || Boolean(touch.jump)
-        };
+        const input = this.input;
+        input.forward = this.pressed.forward || Boolean(touch.forward);
+        input.backward = this.pressed.backward || Boolean(touch.backward);
+        input.left = this.pressed.left || Boolean(touch.left);
+        input.right = this.pressed.right || Boolean(touch.right);
+        input.brake = this.pressed.brake || Boolean(touch.brake);
+        input.jump = this.pressed.jump || Boolean(touch.jump);
+        return input;
     }
 
     updateSteering({ left, right }) {
