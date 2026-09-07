@@ -35,7 +35,6 @@ export class CarControls {
         this.pressed = { forward: false, backward: false, left: false, right: false, brake: false, jump: false };
         this.currentSpeed = 0;
         this.currentSteeringAngle = 0;
-        this.lastInput = { forward: false, backward: false, brake: false };
 
         this.onKeyDown = (event) => this.handleKey(event, true);
         this.onKeyUp = (event) => this.handleKey(event, false);
@@ -71,7 +70,6 @@ export class CarControls {
     /** Applies the combined keyboard and touch input to the car, once per rendered frame */
     update() {
         const input = this.combineInputs();
-        this.lastInput = input;
 
         if (input.jump) {
             this.car.holdJump();
@@ -85,13 +83,9 @@ export class CarControls {
         this.car.setSteeringAngle(this.currentSteeringAngle);
     }
 
-    /** Cockpit animation state for the car's steering wheel and pedal. */
+    /** Cockpit animation state for the car's steering wheel. */
     getVisualState() {
-        const input = this.lastInput;
-        return {
-            steerAngle: this.currentSteeringAngle,
-            isPedalPressed: input.forward || input.backward || input.brake
-        };
+        return { steerAngle: this.currentSteeringAngle };
     }
 
     combineInputs() {

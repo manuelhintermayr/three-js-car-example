@@ -32,8 +32,6 @@ const JUMP_FORCE = 3000;
 
 // Visual animation of the cockpit
 const STEERING_WHEEL_RATIO = 4; // dashboard wheel turns further than the road wheels
-const PEDAL_PRESS_ANGLE = 0.5; // radians the pedal rotates when pressed
-const PEDAL_SMOOTHING = 0.25;
 
 const ORIGIN = { x: 0, y: 0, z: 0 };
 const AXIS_X = { x: 1, y: 0, z: 0 };
@@ -49,7 +47,6 @@ export class Car {
         this.wheelAssemblies = wheelAssemblies;
         this.cockpit = cockpit;
         this.ackermann = ackermann;
-        this.pedalPress = 0;
         this.driveJoints = wheelAssemblies.filter(wheel => wheel.driveJoint).map(wheel => wheel.driveJoint);
         this.steeringJoints = {
             left: wheelAssemblies.find(wheel => wheel.name === 'frontLeft').steeringJoint,
@@ -114,15 +111,12 @@ export class Car {
     }
 
     /**
-     * Turns the dashboard steering wheel and presses the pedal in time with the controls.
+     * Turns the dashboard steering wheel in time with the controls.
      * The road wheels animate on their own because their meshes follow the physics wheel bodies.
-     * @param {{ steerAngle: number, isPedalPressed: boolean }} input
+     * @param {{ steerAngle: number }} input
      */
     updateVisuals(input) {
-        this.cockpit.steeringWheel.rotation.z = -input.steerAngle * STEERING_WHEEL_RATIO;
-        const target = input.isPedalPressed ? PEDAL_PRESS_ANGLE : 0;
-        this.pedalPress += (target - this.pedalPress) * PEDAL_SMOOTHING;
-        this.cockpit.pedal.rotation.x = this.pedalPress;
+        this.cockpit.steeringWheel.setRotationFromAxisAngle(this.cockpit.steeringAxis, -input.steerAngle * STEERING_WHEEL_RATIO);
     }
 }
 
@@ -150,16 +144,41 @@ export async function createCar(scene, world) {
 
     const cockpit = buildCockpit(mesh, model);
     createCarLights(mesh, model);
+    addGlass(mesh, model);
 
     return new Car({ mesh, body, wheelAssemblies, cockpit, ackermann: makeAckermann(model) });
 }
 
-/** Adds the steering wheel and pedal to the body as animatable pivots. */
+/** Adds the window glass as a separate translucent mesh so the body itself stays opaque. */
+function addGlass(bodyMesh, model) {
+    if (!model.glassGeometry) {
+        return;
+    }
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x2a3340,
+        transparent: true,
+        opacity: 0.35,
+        roughness: 0.1,
+        metalness: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    const glass = new THREE.Mesh(model.glassGeometry, material);
+    glass.name = 'Glass';
+    bodyMesh.add(glass);
+}
+
+/** Adds the steering wheel and pedal to the body; the steering wheel spins around its column axis. */
 function buildCockpit(bodyMesh, model) {
-    const steeringWheel = createPivotMesh(model.steeringWheel, model.bodyMaterial);
-    const pedal = createPivotMesh(model.pedal, model.bodyMaterial);
-    bodyMesh.add(steeringWheel, pedal);
-    return { steeringWheel, pedal };
+    const steeringGroup = new THREE.Group();
+    steeringGroup.position.copy(model.steeringWheel.pivot);
+    const steeringWheel = new THREE.Mesh(model.steeringWheel.geometry, model.bodyMaterial);
+    steeringWheel.castShadow = true;
+    steeringGroup.add(steeringWheel);
+
+    const pedalGroup = createPivotMesh(model.pedal, model.bodyMaterial);
+    bodyMesh.add(steeringGroup, pedalGroup);
+    return { steeringWheel, steeringAxis: model.steeringWheel.axis };
 }
 
 /** A group placed at the part's pivot, carrying its tilt, with the recentred mesh inside. */

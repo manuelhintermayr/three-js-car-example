@@ -10,15 +10,18 @@ const DRACO_DECODER_PATH = 'https://cdn.jsdelivr.net/npm/three@0.185.1/examples/
 // Half-track the physics rig is tuned for; the model is scaled uniformly so its wheels span it.
 // Matching the track (not the wheelbase) keeps the original roll-over resistance.
 const TARGET_HALF_TRACK = 5;
+// The chassis rests ~3.2 above the wheels; the body is lowered by a bit less so a small gap remains
+const BODY_DROP = 1.8;
 
 // Node names inside the model (stable, preserved through Draco compression). Everything not listed is body.
 const PART_NAMES = {
     frontWheels: ['Cylinder.023'],
     rearWheels: ['Cylinder.024'],
-    steeringWheel: ['Torus.002'],
+    steeringWheel: ['Torus.002', 'Cube.074', 'Cube.075'],
     pedal: ['Cylinder.029', 'Cube.073'],
     headlights: ['Plane.021'],
-    taillights: ['Plane.041', 'Plane.042', 'Plane.043']
+    taillights: ['Plane.041', 'Plane.042', 'Plane.043'],
+    glass: ['Plane.001', 'Plane.029', 'Plane.023']
 };
 
 const WHEEL_CORNERS = { front: ['frontLeft', 'frontRight'], rear: ['rearLeft', 'rearRight'] };
@@ -70,7 +73,8 @@ async function loadAndPrepare() {
         steeringWheel: buildSteeringWheel(meshes.steeringWheel, bake),
         pedal: buildPedal(meshes.pedal, bake),
         headlightGeometry: markShared(mergeBaked(meshes.headlights, bake)),
-        taillightGeometry: markShared(mergeBaked(meshes.taillights, bake))
+        taillightGeometry: markShared(mergeBaked(meshes.taillights, bake)),
+        glassGeometry: meshes.glass.length > 0 ? markShared(mergeBaked(meshes.glass, bake)) : null
     };
 }
 
@@ -90,7 +94,7 @@ function classifyMeshes(root) {
             lookup.set(normalize(name), part);
         }
     }
-    const buckets = { body: [], frontWheels: [], rearWheels: [], steeringWheel: [], pedal: [], headlights: [], taillights: [] };
+    const buckets = { body: [], frontWheels: [], rearWheels: [], steeringWheel: [], pedal: [], headlights: [], taillights: [], glass: [] };
     root.traverse(object => {
         if (object.isMesh) {
             buckets[lookup.get(normalize(object.name)) ?? 'body'].push(object);
@@ -115,7 +119,8 @@ function computeBakeMatrix(frontWheels, rearWheels, scale) {
     const midZ = (front.z + rear.z) / 2;
     const axleY = (front.y + rear.y) / 2;
     return new THREE.Matrix4()
-        .makeScale(scale, scale, scale)
+        .makeTranslation(0, -BODY_DROP, 0)
+        .multiply(new THREE.Matrix4().makeScale(scale, scale, scale))
         .multiply(new THREE.Matrix4().makeTranslation(0, -axleY, -midZ));
 }
 
@@ -183,15 +188,14 @@ function filterTrianglesByX(geometry, keep) {
  * @property {THREE.Quaternion} orientation - world orientation the pivot node re-applies
  */
 function buildSteeringWheel(meshes, bake) {
-    const mesh = meshes[0];
-    const orientation = mesh.getWorldQuaternion(new THREE.Quaternion());
-    const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld).applyMatrix4(bake);
+    const ring = meshes.find(mesh => mesh.name.startsWith('Torus')) ?? meshes[0];
+    // The steering column axis is the ring's hole axis (its local Y), carried into car-frame coordinates
+    const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(ring.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    const geometry = mergeBaked(meshes, bake); // ring plus its spokes and hub, kept in their real orientation
     geometry.computeBoundingBox();
     const pivot = geometry.boundingBox.getCenter(new THREE.Vector3());
     geometry.translate(-pivot.x, -pivot.y, -pivot.z);
-    // Undo the world orientation so the local rim lies in the XY plane; the pivot node re-applies the tilt
-    geometry.applyQuaternion(orientation.clone().invert());
-    return { geometry: markShared(geometry), pivot, orientation };
+    return { geometry: markShared(geometry), pivot, axis };
 }
 
 function buildPedal(meshes, bake) {
