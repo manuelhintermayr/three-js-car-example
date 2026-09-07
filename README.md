@@ -10,6 +10,14 @@ The Babylon.js original runs at [https://projects.manuelhintermayr.com/babylon-j
 
 ![Game Preview](preview.jpg)
 
+## 🎬 Gameplay Demo
+
+The gameplay matches the original, so the demo video is shared with the Babylon.js port:
+
+<video src="https://raw.githubusercontent.com/manuelhintermayr/babylon-js-car-example/main/preview.mp4" poster="preview.jpg" width="800" controls muted loop playsinline>
+  <img src="preview.jpg" alt="Gameplay demo (shared with the Babylon.js port)" width="800" />
+</video>
+
 ## 🔁 What Was Ported
 
 Every feature of the original showcase is reproduced on the new stack. The Vue components, stylesheets, controls and telemetry are identical; the whole 3D and physics layer was rewritten.
