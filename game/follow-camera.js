@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 
 const FIELD_OF_VIEW_DEGREES = 45.8; // Babylon.js default camera fov (0.8 rad)
+const COCKPIT_FIELD_OF_VIEW_DEGREES = 74; // wide driver-POV: full windshield above, wheel + footwell below
 const NEAR_PLANE = 1;
 const FAR_PLANE = 5000;
 const INITIAL_POSITION = new THREE.Vector3(0, 10, -10);
@@ -24,6 +25,8 @@ export class FollowCamera {
         this.lockedTarget = null;
         this.isMouseDown = false;
         this.canvas = canvas;
+        this.cockpit = false;
+        this.cockpitRig = null;
 
         this.onPointerDown = () => { this.isMouseDown = true; };
         this.onPointerUp = () => { this.isMouseDown = false; };
@@ -33,13 +36,30 @@ export class FollowCamera {
                 this.rotationOffset += event.movementX * MOUSE_DEGREES_PER_PIXEL;
             }
         };
+        this.onKeyDown = (event) => {
+            if ((event.key === 'c' || event.key === 'C') && !event.repeat) {
+                this.setCockpit(!this.cockpit);
+            }
+        };
         canvas.addEventListener('pointerdown', this.onPointerDown);
         window.addEventListener('pointerup', this.onPointerUp);
         window.addEventListener('pointermove', this.onPointerMove);
+        window.addEventListener('keydown', this.onKeyDown);
     }
 
     lockTarget(object) {
         this.lockedTarget = object;
+    }
+
+    /** Interior camera pose in the car's local frame: { eye, look } vectors. */
+    setCockpitRig(rig) {
+        this.cockpitRig = rig;
+    }
+
+    setCockpit(on) {
+        this.cockpit = on;
+        this.camera.fov = on ? COCKPIT_FIELD_OF_VIEW_DEGREES : FIELD_OF_VIEW_DEGREES;
+        this.camera.updateProjectionMatrix();
     }
 
     setAspect(aspect) {
@@ -51,6 +71,10 @@ export class FollowCamera {
         if (!this.lockedTarget) {
             return;
         }
+        if (this.cockpit && this.cockpitRig) {
+            this.updateCockpit();
+            return;
+        }
 
         const goal = this.computeGoalPosition();
         const velocity = goal.sub(this.camera.position);
@@ -59,7 +83,19 @@ export class FollowCamera {
         velocity.z = clampSpeed(velocity.z * FOLLOW.cameraAcceleration * 2);
 
         this.camera.position.add(velocity);
+        // The single shared camera keeps the car's roll from the cockpit's up vector; the bird's-eye
+        // view must stay world-upright, so reset up before lookAt regardless of how the car is lying.
+        this.camera.up.set(0, 1, 0);
         this.camera.lookAt(this.lockedTarget.position);
+    }
+
+    /** Rigidly places the camera at the driver's eye, looking forward through the windshield. */
+    updateCockpit() {
+        const car = this.lockedTarget;
+        car.updateWorldMatrix(true, false);
+        this.camera.position.copy(this.cockpitRig.eye.clone().applyMatrix4(car.matrixWorld));
+        this.camera.up.set(0, 1, 0).applyQuaternion(car.quaternion);
+        this.camera.lookAt(this.cockpitRig.look.clone().applyMatrix4(car.matrixWorld));
     }
 
     computeGoalPosition() {
@@ -81,6 +117,7 @@ export class FollowCamera {
         this.canvas.removeEventListener('pointerdown', this.onPointerDown);
         window.removeEventListener('pointerup', this.onPointerUp);
         window.removeEventListener('pointermove', this.onPointerMove);
+        window.removeEventListener('keydown', this.onKeyDown);
     }
 }
 

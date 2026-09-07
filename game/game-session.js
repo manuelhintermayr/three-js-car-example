@@ -40,6 +40,7 @@ export class GameSession {
 
         this.followCamera = new FollowCamera(canvas);
         this.followCamera.lockTarget(car.mesh);
+        this.followCamera.setCockpitRig(car.cockpitRig);
         console.log('✅ Camera locked to car:', car.mesh.name);
 
         this.reflectionProbe = new ReflectionProbe();
@@ -52,7 +53,7 @@ export class GameSession {
 
     update(deltaSeconds) {
         this.controls.update();
-        this.car.updateVisuals(this.controls.getVisualState());
+        this.car.updateVisuals(this.controls.getVisualState(), this.followCamera.cockpit);
         this.stepper.step(deltaSeconds);
         this.car.syncMeshes();
         this.environment.syncMeshes();

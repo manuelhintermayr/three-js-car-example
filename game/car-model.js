@@ -12,13 +12,18 @@ const DRACO_DECODER_PATH = 'https://cdn.jsdelivr.net/npm/three@0.185.1/examples/
 const TARGET_HALF_TRACK = 5;
 // The chassis rests ~3.2 above the wheels; the body is lowered by a bit less so a small gap remains
 const BODY_DROP = 1.8;
+// The steering hub mesh also holds a fixed arm reaching to the dashboard. In raw model units the hub and
+// spokes sit within this distance of the ring plane along the column axis; the arm lies beyond it.
+const COLUMN_SPLIT_AXIAL = 0.04;
 
 // Node names inside the model (stable, preserved through Draco compression). Everything not listed is body.
 const PART_NAMES = {
     frontWheels: ['Cylinder.023'],
     rearWheels: ['Cylinder.024'],
     steeringWheel: ['Torus.002', 'Cube.074', 'Cube.075'],
-    pedal: ['Cylinder.029', 'Cube.073'],
+    gasPedal: ['Cube.067', 'Cube.068'],
+    brakePedal: ['Cube.065', 'Cube.066'],
+    shifter: ['Cylinder.030'],
     headlights: ['Plane.021'],
     taillights: ['Plane.041', 'Plane.042', 'Plane.043'],
     glass: ['Plane.001', 'Plane.029', 'Plane.023']
@@ -75,7 +80,9 @@ async function loadAndPrepare() {
         halfWheelbase: Math.abs(wheels[0].position.z),
         halfTrack: Math.abs(wheels[0].position.x),
         steeringWheel: buildSteeringWheel(meshes.steeringWheel, bake),
-        pedal: buildPedal(meshes.pedal, bake),
+        gasPedal: buildPedal(meshes.gasPedal, bake),
+        brakePedal: buildPedal(meshes.brakePedal, bake),
+        shifter: buildShifter(meshes.shifter, bake),
         headlightGeometry: markShared(mergeBaked(meshes.headlights, bake)),
         taillightGeometry: markShared(mergeBaked(meshes.taillights, bake)),
         glassGeometry: meshes.glass.length > 0 ? markShared(mergeBaked(meshes.glass, bake)) : null
@@ -98,7 +105,7 @@ function classifyMeshes(root) {
             lookup.set(normalize(name), part);
         }
     }
-    const buckets = { body: [], frontWheels: [], rearWheels: [], steeringWheel: [], pedal: [], headlights: [], taillights: [], glass: [] };
+    const buckets = { body: [], frontWheels: [], rearWheels: [], steeringWheel: [], gasPedal: [], brakePedal: [], shifter: [], headlights: [], taillights: [], glass: [] };
     root.traverse(object => {
         if (object.isMesh) {
             buckets[lookup.get(normalize(object.name)) ?? 'body'].push(object);
@@ -141,8 +148,8 @@ function mergeBaked(meshes, bake) {
 function splitWheelPair(wheelMeshes, bake, [leftCorner, rightCorner]) {
     const pair = mergeBaked(wheelMeshes, bake).toNonIndexed();
     return [
-        finishWheel(filterTrianglesByX(pair, side => side > 0), leftCorner),
-        finishWheel(filterTrianglesByX(pair, side => side < 0), rightCorner)
+        finishWheel(filterTriangles(pair, cx => cx > 0), leftCorner),
+        finishWheel(filterTriangles(pair, cx => cx < 0), rightCorner)
     ];
 }
 
@@ -154,14 +161,16 @@ function finishWheel(geometry, corner) {
     return { corner, geometry: markShared(geometry), position, radius: Math.max(size.y, size.z) / 2 };
 }
 
-/** Keeps the triangles whose centroid X passes the predicate (the two wheels have a gap at X = 0). */
-function filterTrianglesByX(geometry, keep) {
+/** Keeps the triangles whose centroid (cx, cy, cz) passes the predicate, as a fresh non-indexed geometry. */
+function filterTriangles(geometry, keep) {
     const src = geometry.attributes;
     const out = { position: [], normal: [], uv: [] };
     const pos = src.position;
     for (let t = 0; t < pos.count; t += 3) {
-        const centroidX = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
-        if (!keep(centroidX)) {
+        const cx = (pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2)) / 3;
+        const cy = (pos.getY(t) + pos.getY(t + 1) + pos.getY(t + 2)) / 3;
+        const cz = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
+        if (!keep(cx, cy, cz)) {
             continue;
         }
         for (let v = t; v < t + 3; v++) {
@@ -195,11 +204,35 @@ function buildSteeringWheel(meshes, bake) {
     const ring = meshes.find(mesh => mesh.name.startsWith('Torus')) ?? meshes[0];
     // The steering column axis is the ring's hole axis (its local Y), carried into car-frame coordinates
     const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(ring.getWorldQuaternion(new THREE.Quaternion())).normalize();
-    const geometry = mergeBaked(meshes, bake); // ring plus its spokes and hub, kept in their real orientation
-    geometry.computeBoundingBox();
-    const pivot = geometry.boundingBox.getCenter(new THREE.Vector3());
+
+    // Ring centre: in world space for the axial split, in car-frame (the pivot) so the wheel spins in place.
+    const ringWorld = ring.geometry.clone().applyMatrix4(ring.matrixWorld);
+    ringWorld.computeBoundingBox();
+    const center = ringWorld.boundingBox.getCenter(new THREE.Vector3());
+    const ringBaked = ringWorld.clone().applyMatrix4(bake);
+    ringBaked.computeBoundingBox();
+    const pivot = ringBaked.boundingBox.getCenter(new THREE.Vector3());
+
+    // The hub mesh (Cube.075) bundles the spinning hub + spokes with a fixed arm reaching the dashboard.
+    // Split it by distance from the ring plane along the column axis: the near part spins, the arm stays.
+    const column = meshes.find(mesh => mesh.name.replace(/\./g, '').startsWith('Cube075'));
+    const axialOf = (x, y, z) => (x - center.x) * axis.x + (y - center.y) * axis.y + (z - center.z) * axis.z;
+    const bakeAndNormalize = geometry => filterTriangles(geometry.applyMatrix4(bake), () => true);
+
+    const spinning = [];
+    let armGeometry = null;
+    for (const mesh of meshes) {
+        const world = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld).toNonIndexed();
+        if (mesh === column) {
+            spinning.push(bakeAndNormalize(filterTriangles(world, (x, y, z) => Math.abs(axialOf(x, y, z)) < COLUMN_SPLIT_AXIAL)));
+            armGeometry = markShared(bakeAndNormalize(filterTriangles(world, (x, y, z) => Math.abs(axialOf(x, y, z)) >= COLUMN_SPLIT_AXIAL)));
+        } else {
+            spinning.push(bakeAndNormalize(world));
+        }
+    }
+    const geometry = mergeGeometries(spinning, false);
     geometry.translate(-pivot.x, -pivot.y, -pivot.z);
-    return { geometry: markShared(geometry), pivot, axis };
+    return { geometry: markShared(geometry), pivot, axis, armGeometry };
 }
 
 function buildPedal(meshes, bake) {
@@ -208,6 +241,16 @@ function buildPedal(meshes, bake) {
     const box = geometry.boundingBox;
     // Hinge at the top so pressing rotates the pad forward and down around X
     const pivot = new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
+    geometry.translate(-pivot.x, -pivot.y, -pivot.z);
+    return { geometry: markShared(geometry), pivot, orientation: new THREE.Quaternion() };
+}
+
+function buildShifter(meshes, bake) {
+    const geometry = mergeBaked(meshes, bake);
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    // Hinge at the base so tilting rocks the lever forward and back around X
+    const pivot = new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
     geometry.translate(-pivot.x, -pivot.y, -pivot.z);
     return { geometry: markShared(geometry), pivot, orientation: new THREE.Quaternion() };
 }

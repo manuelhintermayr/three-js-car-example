@@ -32,6 +32,13 @@ const JUMP_FORCE = 3000;
 
 // Visual animation of the cockpit
 const STEERING_WHEEL_RATIO = 4; // dashboard wheel turns further than the road wheels
+const PEDAL_PRESS_ANGLE = 0.5; // radians the pedal rotates when pressed
+const SHIFTER_TILT_ANGLE = 0.5; // radians the gear lever rocks fore/aft
+const PEDAL_SMOOTHING = 0.25;
+const SHIFTER_SMOOTHING = 0.2;
+// Driver's-eye offset from the steering wheel, in the body's local frame (+Z forward, +X left, +Y up)
+const COCKPIT_EYE_OFFSET = { x: -1.1, y: 2.4, z: -5.6 };
+const COCKPIT_LOOK_OFFSET = { x: 0, y: -2.6, z: 10 }; // forward, gentle downward tilt: wheel/dash/footwell below, full windshield above
 
 const ORIGIN = { x: 0, y: 0, z: 0 };
 const AXIS_X = { x: 1, y: 0, z: 0 };
@@ -46,7 +53,11 @@ export class Car {
         this.body = body;
         this.wheelAssemblies = wheelAssemblies;
         this.cockpit = cockpit;
+        this.cockpitRig = cockpit.rig;
         this.ackermann = ackermann;
+        this.gasPress = 0;
+        this.brakePress = 0;
+        this.shiftPos = 0;
         this.driveJoints = wheelAssemblies.filter(wheel => wheel.driveJoint).map(wheel => wheel.driveJoint);
         this.steeringJoints = {
             left: wheelAssemblies.find(wheel => wheel.name === 'frontLeft').steeringJoint,
@@ -111,12 +122,36 @@ export class Car {
     }
 
     /**
-     * Turns the dashboard steering wheel in time with the controls.
-     * The road wheels animate on their own because their meshes follow the physics wheel bodies.
-     * @param {{ steerAngle: number }} input
+     * Turns the dashboard steering wheel in time with the controls; the road wheels animate on their own
+     * because their meshes follow the physics wheel bodies. The pedal and gear lever animate only in the
+     * interior view, where they are actually visible.
+     * @param {{ steerAngle: number, forward: boolean, backward: boolean, brake: boolean }} input
+     * @param {boolean} inCockpit
      */
-    updateVisuals(input) {
+    updateVisuals(input, inCockpit) {
         this.cockpit.steeringWheel.setRotationFromAxisAngle(this.cockpit.steeringAxis, -input.steerAngle * STEERING_WHEEL_RATIO);
+        this.animateCockpitControls(input, inCockpit);
+    }
+
+    /** Presses each pedal on its own input and rocks the gear lever (fore = accelerate, aft = brake/reverse). */
+    animateCockpitControls(input, inCockpit) {
+        const gasTarget = inCockpit && (input.forward || input.backward) ? PEDAL_PRESS_ANGLE : 0;
+        this.gasPress += (gasTarget - this.gasPress) * PEDAL_SMOOTHING;
+        this.cockpit.gasPedalGroup.rotation.x = this.gasPress;
+
+        const brakeTarget = inCockpit && input.brake ? PEDAL_PRESS_ANGLE : 0;
+        this.brakePress += (brakeTarget - this.brakePress) * PEDAL_SMOOTHING;
+        this.cockpit.brakePedalGroup.rotation.x = this.brakePress;
+
+        // The gear lever moves in every view (like the steering wheel), not only in the cockpit.
+        let shiftTarget = 0;
+        if (input.forward) {
+            shiftTarget = SHIFTER_TILT_ANGLE;
+        } else if (input.brake || input.backward) {
+            shiftTarget = -SHIFTER_TILT_ANGLE;
+        }
+        this.shiftPos += (shiftTarget - this.shiftPos) * SHIFTER_SMOOTHING;
+        this.cockpit.shifterGroup.rotation.x = this.shiftPos;
     }
 }
 
@@ -168,17 +203,37 @@ function addGlass(bodyMesh, model) {
     bodyMesh.add(glass);
 }
 
-/** Adds the steering wheel and pedal to the body; the steering wheel spins around its column axis. */
+/** Adds the steering wheel, pedal and gear lever to the body; the steering wheel spins around its column axis. */
 function buildCockpit(bodyMesh, model) {
+    bodyMesh.material.side = THREE.DoubleSide; // so the interior renders when the cockpit camera is inside
+
     const steeringGroup = new THREE.Group();
     steeringGroup.position.copy(model.steeringWheel.pivot);
     const steeringWheel = new THREE.Mesh(model.steeringWheel.geometry, model.bodyMaterial);
     steeringWheel.castShadow = true;
     steeringGroup.add(steeringWheel);
 
-    const pedalGroup = createPivotMesh(model.pedal, model.bodyMaterial);
-    bodyMesh.add(steeringGroup, pedalGroup);
-    return { steeringWheel, steeringAxis: model.steeringWheel.axis };
+    const gasPedalGroup = createPivotMesh(model.gasPedal, model.bodyMaterial);
+    const brakePedalGroup = createPivotMesh(model.brakePedal, model.bodyMaterial);
+    const shifterGroup = createPivotMesh(model.shifter, model.bodyMaterial);
+    bodyMesh.add(steeringGroup, gasPedalGroup, brakePedalGroup, shifterGroup);
+
+    // The steering column arm stays fixed with the body; only the wheel above it spins.
+    if (model.steeringWheel.armGeometry) {
+        const column = new THREE.Mesh(model.steeringWheel.armGeometry, model.bodyMaterial);
+        column.name = 'SteeringColumn';
+        column.castShadow = true;
+        bodyMesh.add(column);
+    }
+
+    return { steeringWheel, steeringAxis: model.steeringWheel.axis, gasPedalGroup, brakePedalGroup, shifterGroup, rig: cockpitRig(model) };
+}
+
+/** Driver's-eye camera rig in the body's local frame: where the eye sits and the point it looks at. */
+function cockpitRig(model) {
+    const eye = model.steeringWheel.pivot.clone().add(new THREE.Vector3(COCKPIT_EYE_OFFSET.x, COCKPIT_EYE_OFFSET.y, COCKPIT_EYE_OFFSET.z));
+    const look = eye.clone().add(new THREE.Vector3(COCKPIT_LOOK_OFFSET.x, COCKPIT_LOOK_OFFSET.y, COCKPIT_LOOK_OFFSET.z));
+    return { eye, look };
 }
 
 /** A group placed at the part's pivot, carrying its tilt, with the recentred mesh inside. */
